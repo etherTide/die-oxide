@@ -1,4 +1,4 @@
-use std::{fmt::Display, range::Range};
+use std::fmt::Display;
 
 use rand::random_range;
 
@@ -7,9 +7,11 @@ pub struct Die {
     faces: u8,
 }
 impl Die {
+    #[must_use]
     pub const fn new(faces: u8) -> Self {
         Self { faces }
     }
+    #[must_use]
     pub fn roll(&self) -> u8 {
         random_range(1..=self.faces)
     }
@@ -30,11 +32,9 @@ pub struct DiceTray {
     pub results: Vec<u8>,
 }
 impl DiceTray {
+    #[must_use]
     pub fn new(die: Die, count: u8) -> Self {
-        let results: Vec<u8> = Range::from(0..count)
-            .into_iter()
-            .map(|_| die.roll())
-            .collect();
+        let results: Vec<u8> = (0..count).into_iter().map(|_| die.roll()).collect();
         Self { die, results }
     }
 }
