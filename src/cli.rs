@@ -1,9 +1,9 @@
 use crate::dice::{DiceTray, Die};
 
-use std::{fmt::Display, str::FromStr};
+use std::{error::Error, fmt::Display, str::FromStr};
 
 use clap::Parser;
-use color_eyre::eyre::{Ok, OptionExt, Report, Result, WrapErr};
+use color_eyre::eyre::{Ok, Report, Result};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -18,83 +18,42 @@ pub struct RollCommand {
     modifiers: Vec<i8>,
 }
 impl RollCommand {
-    fn split_cmd_string(s: &str) -> Result<(&str, &str, &str)> {
-        todo!();
-    }
-    fn parse_num(s: &str) -> Result<u8> {
-        let mut num: u8 = 0;
-        for c in s.chars() {
-            // shift digits left and append next
-            // HACK: saturating add instead of handling overflow
-            num = num.saturating_mul(10);
-            num = num.saturating_add(u8::try_from(
-                c.to_digit(10).ok_or_eyre("Error parsing digit")?,
-            )?);
-        }
-        if num == 0 { Ok(1) } else { Ok(num) }
-    }
-    fn parse_die(s: &str) -> Result<Die> {
-        match s.chars().nth(0) {
-            Some('d') => {
-                let num = Self::parse_num(&s[1..])?;
-                Ok(Die::new(num))
-            }
-            None => Ok(Die::default()), // empty string slice
-            _ => Err(Report::msg("Die string must start with 'd', eg 'd20'")),
-        }
-    }
-    fn parse_mods(s: &str) -> Result<Vec<i8>> {
-        s.split_whitespace()
-            .map(|m| {
-                let mut m_val: i8 = 0;
-                for (i, c) in m[1..].char_indices() {
-                    let digit: Result<i8> = i8::try_from(c.to_digit(10).unwrap_or_default())
-                        .wrap_err("Error parsing digit");
-                    let significance: Result<u32> =
-                        u32::try_from(m.len() - i).wrap_err("Error parsing digit");
-                    m_val += i8::try_from(digit? * i8::pow(10, significance?))?;
-                }
-                match m.chars().nth(0) {
-                    // FIXME:
-                    Some('+') => Ok(m_val),
-                    Some('-') => Ok(-1 * m_val),
-                    _ => {
-                        return Err(Report::msg(
-                            "Modifier string must start with ' +' or ' -', eg ' +2'",
-                        ));
-                    }
-                }
-            })
-            .collect()
-    }
-}
-impl FromStr for RollCommand {
-    /// The format of a RollCommand is:
-    /// [count] ['d'size] [(' +'/' -')modifier]*
-    /// eg "3d8 +2 -1"
-    type Err = Report;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (count_str, die_str, mods_str) = Self::split_cmd_string(s)?;
-        let count = Self::parse_num(count_str)?;
-        let die = Self::parse_die(die_str)?;
-        let modifiers = Self::parse_mods(mods_str)?;
-        Ok(Self {
-            count,
-            die,
-            modifiers,
-        })
-    }
-}
-impl RollCommand {
-    fn roll(&self) -> RollResult {
-        RollResult::new(&self)
-    }
     fn new(count: u8, die: Die, modifiers: &[i8]) -> Self {
         Self {
             count,
             die,
             modifiers: modifiers.to_owned(),
         }
+    }
+    fn roll(&self) -> RollResult {
+        RollResult::new(&self)
+    }
+    /// Tries to find and pop a string of numbers from the begining of the slice, or returns an empty
+    /// `count_str` and goes to the next step.
+    /// If the string starts with `'d'` at this point, tries to find and pop a subsequent string of numbers, else returns empty `die_str` and continues.
+    /// Finally, checks that the remaining slice is either empty or only contains modifiers,
+    /// returning the entire tail as a `mod_str` on success.
+    /// If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
+    fn split_cmd_string(s: &str) -> Result<(CountStr, DieStr, ModsStr)> {
+        todo!();
+        Ok((CountStr::new(""), DieStr::new(""), ModsStr::new("")))
+    }
+}
+impl FromStr for RollCommand {
+    type Err = Report;
+    /// The format of a `RollCommand` is:
+    /// `[count]` `['d'size]` `[(' +'/' -')modifier]*`
+    /// eg `"3d8 +2 -1"`
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (count_str, die_str, mods_str) = Self::split_cmd_string(s)?;
+        let count = count_str.parse();
+        let die = die_str.parse();
+        let modifiers = mods_str.parse();
+        Ok(Self {
+            count,
+            die,
+            modifiers,
+        })
     }
 }
 impl Default for RollCommand {
@@ -113,7 +72,7 @@ impl Display for RollCommand {
             .collect::<String>();
         let roll_str = roll_str.trim_end_matches(" + ");
         let mods = &self.modifiers;
-        if mods.len() == 0 {
+        if mods.is_empty() {
             write!(
                 f,
                 "Result: {}\nRolled {}{}: {}",
@@ -139,6 +98,73 @@ impl Display for RollCommand {
         }
     }
 }
+struct CountStr(String);
+impl CountStr {
+    fn new(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+    fn parse(&self) -> Result<u8> {
+        let big_num: u32 = self.0.parse()?;
+        let small_num: u8 = big_num.try_into()?;
+        Ok(small_num)
+    }
+}
+impl FromStr for CountStr {
+    type Err = Report;
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        todo!();
+        Ok(Self::new(s))
+    }
+}
+struct DieStr(String);
+impl DieStr {
+    fn new(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+    fn parse(&self) -> Result<Die> {
+        let digits: &str = match self.0.get(1..) {
+            Some(slice) => Ok(slice),
+            None => Err(Report::msg("Couldn't parse die string")),
+        }?;
+        let big_num: u32 = digits.parse()?;
+        let small_num: u8 = big_num.try_into()?;
+        Ok(Die::new(small_num))
+    }
+}
+impl FromStr for DieStr {
+    type Err = Report;
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        todo!();
+        Ok(Self::new(s))
+    }
+}
+struct ModsStr(String);
+impl ModsStr {
+    fn new(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+    fn parse(&self) -> Result<Vec<i8>> {
+        let mods = self.0.split(' ');
+        let (lower_bound, _) = mods.size_hint();
+        let mut vec = Vec::<i8>::with_capacity(lower_bound);
+        for modifier in mods {
+            vec.push(Self::parse_mod(modifier)?);
+        }
+        Ok(vec)
+    }
+    fn parse_mod(modifier: &str) -> Result<i8> {
+        let big_num: i32 = modifier.parse()?;
+        let small_num: i8 = big_num.try_into()?;
+        Ok(small_num)
+    }
+}
+impl FromStr for ModsStr {
+    type Err = Report;
+    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+        todo!();
+        Ok(Self::new(s))
+    }
+}
 
 #[derive(Debug)]
 struct RollResult {
@@ -154,7 +180,7 @@ impl RollResult {
             dice_sum = dice_sum.saturating_add(i32::from(*roll));
         }
         let mods = &cmd.modifiers;
-        if mods.len() == 0 {
+        if mods.is_empty() {
             Self {
                 dice_tray,
                 result: dice_sum,
@@ -165,5 +191,14 @@ impl RollResult {
             let result = i32::saturating_add(dice_sum, mod_sum);
             Self { dice_tray, result }
         }
+    }
+}
+fn split_at_non_digit(s: &str) -> Result<(&str, &str)> {
+    match s.find(|c: char| !c.is_digit(10)) {
+        Some(non_digit) => match s.split_at_checked(non_digit) {
+            Some((first, second)) => Ok((first, second)),
+            None => Err(Report::msg("Split occured inside UTF-character")),
+        },
+        None => Ok((s, "")),
     }
 }
