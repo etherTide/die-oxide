@@ -38,12 +38,73 @@ impl RollCommand {
     /// returning the entire tail as a `mod_str` on success.
     /// If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
     fn split_cmd_string(s: &str) -> Result<(CountStr, DieStr, ModsStr)> {
-        let mut s = s;
         let mut buf = String::with_capacity(s.len());
-        let mut s_iter = s.chars().peekable().enumerate();
+        let mut used: usize = 0;
+        let mut s_iter = s.chars().skip(used).enumerate().peekable();
         // count
+        loop {
+            if let Some(element) = s_iter.peek() {
+                if CountStr::is_match(&element) {
+                    buf.push(element.1);
+                    s_iter.next();
+                    used += 1;
+                } else {
+                    break;
+                }
+            } else {
+                return Ok((CountStr::new(&buf), DieStr::new(""), ModsStr::new("")));
+            }
+        }
+        let count_str = CountStr::new(&buf);
+        buf.clear();
         // die
+        // TODO: Check that enumerate doesn't keep counting from before the `skip()`
+        s_iter = s.chars().skip(used).enumerate().peekable();
+        loop {
+            if let Some(element) = s_iter.peek() {
+                if DieStr::is_match(element) {
+                    buf.push(element.1);
+                    s_iter.next();
+                    used += 1;
+                } else {
+                    break;
+                }
+            } else {
+                return Ok((count_str, DieStr::new(&buf), ModsStr::new("")));
+            }
+        }
+        let die_str = DieStr::new(&buf);
+        buf.clear();
         // mods
+        s_iter = s.chars().skip(used).enumerate().peekable();
+        loop {
+            if let Some(element) = s_iter.peek() {
+                if ModsStr::is_match(element) {
+                    buf.push(element.1);
+                    s_iter.next();
+                    used += 1;
+                } else {
+                    // `" +1?".get(3) == '?'` -> could be `" +1 -2"` and therefore part of new sequence
+                    if element.0 > 2 {
+                        // reset enumeration
+                        s_iter = s.chars().skip(used).enumerate().peekable();
+                        continue;
+                    };
+                    // fail-case: mod string cannot be shorter than 3 chars
+                    return Err(Report::msg(
+                        "Error: Input string was not of the form `[count]d[die] +/-[modifiers]`",
+                    ));
+                }
+            } else {
+                return Ok((count_str, die_str, ModsStr::new(&buf)));
+            }
+        }
+        // let mods_str = ModsStr::new(&buf);
+        // if used == s.len() {
+        //     Ok((count_str, die_str, mods_str))
+        // } else {
+        //     Err(Report::msg("Error: Failed to parse input"))
+        // }
     }
 }
 impl FromStr for RollCommand {
@@ -115,8 +176,8 @@ impl CountStr {
         let small_num: u8 = big_num.try_into()?;
         Ok(small_num)
     }
-    fn is_match(element: (usize, char)) -> bool {
-        let (_idx, c) = element;
+    fn is_match(element: &(usize, char)) -> bool {
+        let (_idx, c) = *element;
         c.is_digit(10)
     }
 }
@@ -134,8 +195,8 @@ impl DieStr {
         let small_num: u8 = big_num.try_into()?;
         Ok(Die::new(small_num))
     }
-    fn is_match(element: (usize, char)) -> bool {
-        let (idx, c) = element;
+    fn is_match(element: &(usize, char)) -> bool {
+        let (idx, c) = *element;
         if idx == 0 { c == 'd' } else { c.is_digit(10) }
     }
 }
@@ -158,8 +219,8 @@ impl ModsStr {
         let small_num: i8 = big_num.try_into()?;
         Ok(small_num)
     }
-    fn is_match(element: (usize, char)) -> bool {
-        let (idx, c) = element;
+    fn is_match(element: &(usize, char)) -> bool {
+        let (idx, c) = *element;
         match idx {
             0 => c == ' ',
             1 => "+-".contains(c),
