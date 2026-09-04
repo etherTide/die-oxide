@@ -1,6 +1,9 @@
 use crate::dice::{DiceTray, Die};
-
-use std::{error::Error, fmt::Display, str::FromStr};
+use std::{
+    fmt::Display,
+    iter::Enumerate,
+    str::{Chars, FromStr},
+};
 
 use clap::Parser;
 use color_eyre::eyre::{Ok, Report, Result};
@@ -35,8 +38,12 @@ impl RollCommand {
     /// returning the entire tail as a `mod_str` on success.
     /// If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
     fn split_cmd_string(s: &str) -> Result<(CountStr, DieStr, ModsStr)> {
-        todo!();
-        Ok((CountStr::new(""), DieStr::new(""), ModsStr::new("")))
+        let mut s = s;
+        let mut buf = String::with_capacity(s.len());
+        let mut s_iter = s.chars().peekable().enumerate();
+        // count
+        // die
+        // mods
     }
 }
 impl FromStr for RollCommand {
@@ -46,9 +53,9 @@ impl FromStr for RollCommand {
     /// eg `"3d8 +2 -1"`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (count_str, die_str, mods_str) = Self::split_cmd_string(s)?;
-        let count = count_str.parse();
-        let die = die_str.parse();
-        let modifiers = mods_str.parse();
+        let count = count_str.parse()?;
+        let die = die_str.parse()?;
+        let modifiers = mods_str.parse()?;
         Ok(Self {
             count,
             die,
@@ -108,12 +115,9 @@ impl CountStr {
         let small_num: u8 = big_num.try_into()?;
         Ok(small_num)
     }
-}
-impl FromStr for CountStr {
-    type Err = Report;
-    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
-        todo!();
-        Ok(Self::new(s))
+    fn is_match(element: (usize, char)) -> bool {
+        let (_idx, c) = element;
+        c.is_digit(10)
     }
 }
 struct DieStr(String);
@@ -130,12 +134,9 @@ impl DieStr {
         let small_num: u8 = big_num.try_into()?;
         Ok(Die::new(small_num))
     }
-}
-impl FromStr for DieStr {
-    type Err = Report;
-    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
-        todo!();
-        Ok(Self::new(s))
+    fn is_match(element: (usize, char)) -> bool {
+        let (idx, c) = element;
+        if idx == 0 { c == 'd' } else { c.is_digit(10) }
     }
 }
 struct ModsStr(String);
@@ -157,12 +158,13 @@ impl ModsStr {
         let small_num: i8 = big_num.try_into()?;
         Ok(small_num)
     }
-}
-impl FromStr for ModsStr {
-    type Err = Report;
-    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
-        todo!();
-        Ok(Self::new(s))
+    fn is_match(element: (usize, char)) -> bool {
+        let (idx, c) = element;
+        match idx {
+            0 => c == ' ',
+            1 => "+-".contains(c),
+            _ => c.is_digit(10),
+        }
     }
 }
 
