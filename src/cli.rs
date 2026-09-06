@@ -1,35 +1,40 @@
 use crate::dice::{DiceTray, Die};
-use std::{
-    fmt::Display,
-    iter::Enumerate,
-    str::{Chars, FromStr},
-};
+use std::{fmt::Display, rc::Rc, str::FromStr, sync::Arc};
 
-use clap::Parser;
 use color_eyre::eyre::{Ok, Report, Result};
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
-    pub rolls: Option<Vec<RollCommand>>,
+    pub roll_cmds: Option<Vec<RollCommand>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RollCommand {
     count: u8,
     die: Die,
-    modifiers: Vec<i8>,
+    modifiers: Arc<[i8]>,
 }
 impl RollCommand {
-    fn new(count: u8, die: Die, modifiers: &[i8]) -> Self {
+    pub fn new(count: u8, die: Die, modifiers: &[i8]) -> Self {
         Self {
             count,
             die,
-            modifiers: modifiers.to_owned(),
+            modifiers: modifiers.to_owned().into(),
         }
     }
-    fn roll(&self) -> RollResult {
+    pub fn roll(&self) -> RollResult {
         RollResult::new(&self)
+    }
+    pub fn print_roll(&self) {
+        println!("Rolling {self}...");
+        let roll = self.roll();
+        println!("{roll}");
+    }
+    fn sum_mods(&self) -> Option<i32> {
+        self.modifiers
+            .iter()
+            .fold(Some(0_i32), |acc, &elem| acc?.checked_add(elem.into()))
     }
     /// Tries to find and pop a string of numbers from the begining of the slice, or returns an empty
     /// `count_str` and goes to the next step.
@@ -58,7 +63,6 @@ impl RollCommand {
         let count_str = CountStr::new(&buf);
         buf.clear();
         // die
-        // TODO: Check that enumerate doesn't keep counting from before the `skip()`
         s_iter = s.chars().skip(used).enumerate().peekable();
         loop {
             if let Some(element) = s_iter.peek() {
@@ -78,50 +82,41 @@ impl RollCommand {
         // mods
         s_iter = s.chars().skip(used).enumerate().peekable();
         loop {
-            if let Some(element) = s_iter.peek() {
-                if ModsStr::is_match(element) {
-                    buf.push(element.1);
+            if let Some(&(idx, elem)) = s_iter.peek() {
+                if ModsStr::is_match(&(idx, elem)) {
+                    buf.push(elem);
                     s_iter.next();
                     used += 1;
                 } else {
-                    // `" +1?".get(3) == '?'` -> could be `" +1 -2"` and therefore part of new sequence
-                    if element.0 > 2 {
+                    // `"+1?".get(2) == '?'` -> could be `"+1-2"` and therefore part of new sequence
+                    if idx > 1 {
                         // reset enumeration
                         s_iter = s.chars().skip(used).enumerate().peekable();
                         continue;
                     };
-                    // fail-case: mod string cannot be shorter than 3 chars
+                    // fail-case: mod string cannot be shorter than 2 chars
                     return Err(Report::msg(
-                        "Error: Input string was not of the form `[count]d[die] +/-[modifiers]`",
+                        "Error: Input string was not of the form `[count]d[die]+/-[modifiers]`",
                     ));
                 }
             } else {
                 return Ok((count_str, die_str, ModsStr::new(&buf)));
             }
         }
-        // let mods_str = ModsStr::new(&buf);
-        // if used == s.len() {
-        //     Ok((count_str, die_str, mods_str))
-        // } else {
-        //     Err(Report::msg("Error: Failed to parse input"))
-        // }
     }
 }
 impl FromStr for RollCommand {
     type Err = Report;
     /// The format of a `RollCommand` is:
-    /// `[count]` `['d'size]` `[(' +'/' -')modifier]*`
-    /// eg `"3d8 +2 -1"`
+    /// `[count]` `['d'size]` `[('+'/'-')modifier]*`
+    /// eg `"3d8+2-1"`
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (count_str, die_str, mods_str) = Self::split_cmd_string(s)?;
-        let count = count_str.parse()?;
-        let die = die_str.parse()?;
-        let modifiers = mods_str.parse()?;
-        Ok(Self {
-            count,
-            die,
-            modifiers,
-        })
+        Ok(Self::new(
+            count_str.parse()?,
+            die_str.parse()?,
+            &mods_str.parse()?,
+        ))
     }
 }
 impl Default for RollCommand {
@@ -131,39 +126,18 @@ impl Default for RollCommand {
 }
 impl Display for RollCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let roll_result = self.roll();
-        let roll_str = roll_result
-            .dice_tray
-            .results
+        let mods_str: String = self
+            .modifiers
             .iter()
-            .map(|roll| roll.to_string() + " + ")
-            .collect::<String>();
-        let roll_str = roll_str.trim_end_matches(" + ");
-        let mods = &self.modifiers;
-        if mods.is_empty() {
-            write!(
-                f,
-                "Result: {}\nRolled {}{}: {}",
-                roll_result.result, self.count, self.die, roll_str
-            )
-        } else {
-            let mod_str: String = mods
-                .iter()
-                .map(|&m| {
-                    let mut s = String::with_capacity(3);
-                    if m >= 0 {
-                        s = "+".to_owned();
-                    }
-                    s += &m.to_string();
-                    s + " "
-                })
-                .collect();
-            write!(
-                f,
-                "Result: {}\nRolled {}{}: {}\nModifiers: {}",
-                roll_result.result, self.count, self.die, roll_str, mod_str
-            )
-        }
+            .map(|&elem| {
+                let mut s = elem.to_string();
+                if elem >= 0 {
+                    s.insert(0, '+')
+                }
+                s
+            })
+            .collect();
+        write!(f, "{}{}{}", self.count, self.die, mods_str)
     }
 }
 struct CountStr(String);
@@ -172,9 +146,8 @@ impl CountStr {
         Self(s.to_owned())
     }
     fn parse(&self) -> Result<u8> {
-        let big_num: u32 = self.0.parse()?;
-        let small_num: u8 = big_num.try_into()?;
-        Ok(small_num)
+        let num: u8 = self.0.parse()?;
+        Ok(num)
     }
     fn is_match(element: &(usize, char)) -> bool {
         let (_idx, c) = *element;
@@ -191,9 +164,8 @@ impl DieStr {
             Some(slice) => Ok(slice),
             None => Err(Report::msg("Couldn't parse die string")),
         }?;
-        let big_num: u32 = digits.parse()?;
-        let small_num: u8 = big_num.try_into()?;
-        Ok(Die::new(small_num))
+        let num: u8 = digits.parse()?;
+        Ok(Die::new(num))
     }
     fn is_match(element: &(usize, char)) -> bool {
         let (idx, c) = *element;
@@ -206,62 +178,73 @@ impl ModsStr {
         Self(s.to_owned())
     }
     fn parse(&self) -> Result<Vec<i8>> {
-        let mods = self.0.split(' ');
-        let (lower_bound, _) = mods.size_hint();
-        let mut vec = Vec::<i8>::with_capacity(lower_bound);
-        for modifier in mods {
-            vec.push(Self::parse_mod(modifier)?);
+        let s = &self.0;
+        let mut mods: Vec<Rc<str>> = Vec::with_capacity(self.0.len() / 4); // assuming 1 `+`/`-` plus 3 digits
+        let mut buf = String::with_capacity(4);
+        for c in s.chars() {
+            if c.is_digit(10) {
+                buf.push(c);
+            } else if buf.is_empty() {
+                buf.push(c);
+            } else {
+                mods.push(buf.clone().into());
+                buf.clear();
+                buf.push(c);
+            }
         }
-        Ok(vec)
+        mods.into_iter()
+            .map(|string| Self::parse_mod(&string))
+            .collect()
     }
     fn parse_mod(modifier: &str) -> Result<i8> {
-        let big_num: i32 = modifier.parse()?;
-        let small_num: i8 = big_num.try_into()?;
-        Ok(small_num)
+        let num: i8 = modifier.parse()?;
+        Ok(num)
     }
     fn is_match(element: &(usize, char)) -> bool {
         let (idx, c) = *element;
         match idx {
-            0 => c == ' ',
-            1 => "+-".contains(c),
+            0 => "+-".contains(c),
             _ => c.is_digit(10),
         }
     }
 }
 
 #[derive(Debug)]
-struct RollResult {
+pub struct RollResult {
     dice_tray: DiceTray,
-    result: i32,
+    modifiers: Arc<[i8]>,
+    net_modifier: Option<i32>,
+    result: Option<i64>,
 }
 impl RollResult {
     fn new(cmd: &RollCommand) -> Self {
         let dice_tray = DiceTray::new(cmd.die, cmd.count);
-        let mut dice_sum: i32 = 0;
-        for roll in &dice_tray.results {
-            // HACK: saturate_add instead of handling overflow
-            dice_sum = dice_sum.saturating_add(i32::from(*roll));
-        }
-        let mods = &cmd.modifiers;
-        if mods.is_empty() {
-            Self {
-                dice_tray,
-                result: dice_sum,
-            }
-        } else {
-            let mod_sum: i32 = mods.iter().map(|x| i32::from(*x)).sum();
-            // HACK: saturate_add instead of handling overflow
-            let result = i32::saturating_add(dice_sum, mod_sum);
-            Self { dice_tray, result }
+        let modifiers = cmd.modifiers.clone();
+        let net_modifier: Option<i32> = cmd.sum_mods();
+        let result: Option<i64> = match (dice_tray.result, net_modifier) {
+            (Some(a), Some(b)) => i64::checked_add(a.into(), b.into()),
+            _ => None,
+        };
+        Self {
+            dice_tray,
+            modifiers,
+            net_modifier,
+            result,
         }
     }
 }
-fn split_at_non_digit(s: &str) -> Result<(&str, &str)> {
-    match s.find(|c: char| !c.is_digit(10)) {
-        Some(non_digit) => match s.split_at_checked(non_digit) {
-            Some((first, second)) => Ok((first, second)),
-            None => Err(Report::msg("Split occured inside UTF-character")),
-        },
-        None => Ok((s, "")),
+impl Display for RollResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let result = match self.result {
+            Some(result) => result.to_string(),
+            None => "OVERFLOW!".to_string(),
+        };
+        let dice_tray = &self.dice_tray;
+        let net_modifier = match self.net_modifier {
+            Some(modifier) => modifier.to_string(),
+            None => "OVERFLOW!".to_string(),
+        };
+        let modifiers = self.modifiers.clone();
+        write!(f, "{result}\n{dice_tray}\n{net_modifier}: {modifiers:?}")
     }
 }

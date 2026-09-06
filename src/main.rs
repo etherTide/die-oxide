@@ -3,15 +3,15 @@ use die_oxide::cli::{Cli, RollCommand};
 
 fn main() {
     let cli = Cli::parse();
-    match cli.rolls {
+    match cli.roll_cmds {
         Some(roll_cmds) => {
-            for roll in roll_cmds {
-                println!("{}", roll)
+            for cmd in roll_cmds {
+                cmd.print_roll();
             }
         }
         None => {
-            let roll = RollCommand::default();
-            println!("{}", roll)
+            let cmd = RollCommand::default();
+            cmd.print_roll();
         }
     }
 }
