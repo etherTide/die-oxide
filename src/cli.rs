@@ -192,6 +192,7 @@ impl ModsStr {
                 buf.push(c);
             }
         }
+        mods.push(buf.into());
         mods.into_iter()
             .map(|string| Self::parse_mod(&string))
             .collect()
