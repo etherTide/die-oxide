@@ -25,13 +25,27 @@ impl Cli {
         }
     }
 }
+impl FromStr for RollCommand {
+    type Err = Report;
+    /// The format of a `RollCommand` is:
+    /// `[count]` `['d'size]` `[('+'/'-')modifier]*`
+    /// eg `"3d8+2-1"`
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (count_str, die_str, mods_str) = split_cmd_string(s)?;
+        Ok(Self::new(
+            count_str.parse()?,
+            die_str.parse()?,
+            &mods_str.parse()?,
+        ))
+    }
+}
 fn split_cmd_string(s: &str) -> Result<(CountStr, DieStr, ModsStr)> {
     //! Tries to find and pop a string of numbers from the begining of the slice, or returns an empty
     //! `count_str` and goes to the next step.
     //! If the string starts with `'d'` at this point, tries to find and pop a subsequent string of numbers, else returns empty `die_str` and continues.
     //! Finally, checks that the remaining slice is either empty or only contains modifiers,
     //! returning the entire tail as a `mod_str` on success.
-    //! If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
+    //! If the slice still contains unmatchable patterns, an `Err(color_eyre::Report)` is returned.
     let mut roll_string = s.to_owned();
     let count_str = CountStr::get_from_roll_str(&roll_string);
     roll_string = roll_string.replacen(&count_str.0, "", 1);
@@ -53,7 +67,7 @@ struct CountStr(String);
 impl CountStr {
     fn parse(&self) -> Result<u8> {
         let s = &self.0;
-        let num: u8 = if s.is_empty() { 1 } else { self.0.parse()? };
+        let num: u8 = if s.is_empty() { 1 } else { s.parse()? };
         Ok(num)
     }
     fn get_from_roll_str(roll_str: &str) -> Self {
@@ -134,19 +148,5 @@ impl ModsStr {
         }
         buf.shrink_to_fit();
         Self(buf)
-    }
-}
-impl FromStr for RollCommand {
-    type Err = Report;
-    /// The format of a `RollCommand` is:
-    /// `[count]` `['d'size]` `[('+'/'-')modifier]*`
-    /// eg `"3d8+2-1"`
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (count_str, die_str, mods_str) = split_cmd_string(s)?;
-        Ok(Self::new(
-            count_str.parse()?,
-            die_str.parse()?,
-            &mods_str.parse()?,
-        ))
     }
 }
