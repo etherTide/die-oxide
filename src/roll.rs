@@ -1,7 +1,7 @@
 use crate::dice::{DiceTray, Die};
 use std::{fmt::Display, sync::Arc};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RollCommand {
     count: u8,
     die: Die,

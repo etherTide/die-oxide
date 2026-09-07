@@ -7,7 +7,7 @@ use std::{
 use color_eyre::eyre::{OptionExt, Report};
 use rand::random_range;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Die(pub u8);
 impl Die {
     #[must_use]
