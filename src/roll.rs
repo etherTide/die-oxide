@@ -1,7 +1,7 @@
 use crate::dice::{DiceTray, Die};
 use std::{fmt::Display, rc::Rc, str::FromStr, sync::Arc};
 
-use color_eyre::eyre::{Ok, OptionExt, Report, Result};
+use color_eyre::eyre::{Ok, Report, Result};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RollCommand {
@@ -40,81 +40,20 @@ impl RollCommand {
         //! Finally, checks that the remaining slice is either empty or only contains modifiers,
         //! returning the entire tail as a `mod_str` on success.
         //! If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
-        let mut buf = String::with_capacity(s.len());
-        let mut used: Option<usize> = Some(0);
-        let mut s_iter = s
-            .chars()
-            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
-            .enumerate()
-            .peekable();
-        // count
-        loop {
-            if let Some(element) = s_iter.peek() {
-                if CountStr::is_match(element) {
-                    buf.push(element.1);
-                    s_iter.next();
-                    used = used.map_or_else(|| None, |used| used.checked_add(1));
-                } else {
-                    break;
-                }
-            } else {
-                return Ok((CountStr::new(&buf), DieStr::new(""), ModsStr::new("")));
-            }
-        }
-        let count_str = CountStr::new(&buf);
-        buf.clear();
-        // die
-        s_iter = s
-            .chars()
-            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
-            .enumerate()
-            .peekable();
-        loop {
-            if let Some(element) = s_iter.peek() {
-                if DieStr::is_match(element) {
-                    buf.push(element.1);
-                    s_iter.next();
-                    used = used.map_or_else(|| None, |used| used.checked_add(1));
-                } else {
-                    break;
-                }
-            } else {
-                return Ok((count_str, DieStr::new(&buf), ModsStr::new("")));
-            }
-        }
-        let die_str = DieStr::new(&buf);
-        buf.clear();
-        // mods
-        s_iter = s
-            .chars()
-            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
-            .enumerate()
-            .peekable();
-        loop {
-            if let Some(&(idx, elem)) = s_iter.peek() {
-                if ModsStr::is_match(&(idx, elem)) {
-                    buf.push(elem);
-                    s_iter.next();
-                    used = used.map_or_else(|| None, |used| used.checked_add(1));
-                } else {
-                    // `"+1?".get(2) == '?'` -> could be `"+1-2"` and therefore part of new sequence
-                    if idx > 1 {
-                        // reset enumeration
-                        s_iter = s
-                            .chars()
-                            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
-                            .enumerate()
-                            .peekable();
-                    } else {
-                        // fail-case: mod string cannot be shorter than 2 chars
-                        return Err(Report::msg(
-                            "Error: Input string was not of the form `[count]d[die]+/-[modifiers]`",
-                        ));
-                    }
-                }
-            } else {
-                return Ok((count_str, die_str, ModsStr::new(&buf)));
-            }
+        let mut roll_string = s.to_owned();
+        let count_str = CountStr::get_from_roll_str(&roll_string);
+        roll_string = roll_string.replacen(&count_str.0, "", 1);
+        let die_str = DieStr::get_from_roll_str(&roll_string);
+        roll_string = roll_string.replacen(&die_str.0, "", 1);
+        let mods_str = ModsStr::get_from_roll_str(&roll_string);
+        roll_string = roll_string.replacen(&mods_str.0, "", 1);
+        if roll_string.is_empty() {
+            Ok((count_str, die_str, mods_str))
+        } else {
+            Err(Report::msg(format!(
+                "Error: Could not parse input into the form `[count]d[die]+/-[modifiers]`\nInput: {s}\nCount: {}\nDie: {}\nMods: {}",
+                count_str.0, die_str.0, mods_str.0
+            )))
         }
     }
 }
@@ -155,24 +94,26 @@ impl Display for RollCommand {
 }
 struct CountStr(String);
 impl CountStr {
-    fn new(s: &str) -> Self {
-        Self(s.to_owned())
-    }
     fn parse(&self) -> Result<u8> {
         let s = &self.0;
         let num: u8 = if s.is_empty() { 1 } else { self.0.parse()? };
         Ok(num)
     }
-    const fn is_match(element: &(usize, char)) -> bool {
-        let (_idx, c) = *element;
-        c.is_ascii_digit()
+    fn get_from_roll_str(roll_str: &str) -> Self {
+        let mut buf = String::with_capacity(roll_str.len());
+        for c in roll_str.chars() {
+            if c.is_ascii_digit() {
+                buf.push(c);
+            } else {
+                break;
+            }
+        }
+        buf.shrink_to_fit();
+        Self(buf)
     }
 }
 struct DieStr(String);
 impl DieStr {
-    fn new(s: &str) -> Self {
-        Self(s.to_owned())
-    }
     fn parse(&self) -> Result<Die> {
         let s = &self.0;
         let die = if s.is_empty() {
@@ -185,26 +126,29 @@ impl DieStr {
         };
         Ok(die)
     }
-    const fn is_match(element: &(usize, char)) -> bool {
-        let (idx, c) = *element;
-        if idx == 0 {
-            c == 'd'
-        } else {
-            c.is_ascii_digit()
+    fn get_from_roll_str(roll_str: &str) -> Self {
+        let mut buf = String::with_capacity(roll_str.len());
+        let iter = roll_str.chars().enumerate();
+        for (idx, c) in iter {
+            if (idx == 0 && c == 'd') || c.is_ascii_digit() {
+                buf.push(c);
+            } else {
+                break;
+            }
         }
+        buf.shrink_to_fit();
+        Self(buf)
     }
 }
 struct ModsStr(String);
 impl ModsStr {
-    fn new(s: &str) -> Self {
-        Self(s.to_owned())
-    }
     fn parse(&self) -> Result<Vec<i8>> {
         let s = &self.0;
         if s.is_empty() {
             return Ok(Vec::with_capacity(0));
         }
-        let mut mods: Vec<Rc<str>> = Vec::with_capacity(self.0.len() / 4); // PERF: assuming +/- plus 3 digits
+        // PERF: capacity = 4 bc I'm assuming 1x +/- plus 3x digit
+        let mut mods: Vec<Rc<str>> = Vec::with_capacity(self.0.len() / 4);
         let mut buf = String::with_capacity(4);
         for c in s.chars() {
             // TODO: consider replacing with "+-".contains(c)?
@@ -217,12 +161,25 @@ impl ModsStr {
         mods.push(buf.into());
         mods.into_iter().map(|string| Ok(string.parse()?)).collect()
     }
-    fn is_match(element: &(usize, char)) -> bool {
-        let (idx, c) = *element;
-        match idx {
-            0 => "+-".contains(c),
-            _ => c.is_ascii_digit(),
+    fn get_from_roll_str(roll_str: &str) -> Self {
+        let mut buf = String::with_capacity(roll_str.len());
+        for c in roll_str.chars() {
+            if c.is_ascii_digit() {
+                buf.push(c);
+            } else if "+-".contains(c) && {
+                match buf.chars().last() {
+                    // Don't want "+-XX" etc, should be 1 +/- per mod
+                    Some(prev) => !"+-".contains(prev),
+                    _ => true,
+                }
+            } {
+                buf.push(c);
+            } else {
+                break;
+            }
         }
+        buf.shrink_to_fit();
+        ModsStr(buf)
     }
 }
 
