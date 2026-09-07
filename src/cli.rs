@@ -1,7 +1,7 @@
 use crate::dice::{DiceTray, Die};
 use std::{fmt::Display, rc::Rc, str::FromStr, sync::Arc};
 
-use color_eyre::eyre::{Ok, Report, Result};
+use color_eyre::eyre::{Ok, OptionExt, Report, Result};
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -16,6 +16,7 @@ pub struct RollCommand {
     modifiers: Arc<[i8]>,
 }
 impl RollCommand {
+    #[must_use]
     pub fn new(count: u8, die: Die, modifiers: &[i8]) -> Self {
         Self {
             count,
@@ -23,8 +24,9 @@ impl RollCommand {
             modifiers: modifiers.to_owned().into(),
         }
     }
+    #[must_use]
     pub fn roll(&self) -> RollResult {
-        RollResult::new(&self)
+        RollResult::new(self)
     }
     pub fn print_roll(&self) {
         println!("Rolling {self}...");
@@ -34,25 +36,30 @@ impl RollCommand {
     fn sum_mods(&self) -> Option<i32> {
         self.modifiers
             .iter()
-            .fold(Some(0_i32), |acc, &elem| acc?.checked_add(elem.into()))
+            .try_fold(0_i32, |acc, &elem| acc.checked_add(elem.into()))
     }
-    /// Tries to find and pop a string of numbers from the begining of the slice, or returns an empty
-    /// `count_str` and goes to the next step.
-    /// If the string starts with `'d'` at this point, tries to find and pop a subsequent string of numbers, else returns empty `die_str` and continues.
-    /// Finally, checks that the remaining slice is either empty or only contains modifiers,
-    /// returning the entire tail as a `mod_str` on success.
-    /// If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
+
     fn split_cmd_string(s: &str) -> Result<(CountStr, DieStr, ModsStr)> {
+        //! Tries to find and pop a string of numbers from the begining of the slice, or returns an empty
+        //! `count_str` and goes to the next step.
+        //! If the string starts with `'d'` at this point, tries to find and pop a subsequent string of numbers, else returns empty `die_str` and continues.
+        //! Finally, checks that the remaining slice is either empty or only contains modifiers,
+        //! returning the entire tail as a `mod_str` on success.
+        //! If the slice still contains unmatchable patterns, an `Err(Report)` is returned.
         let mut buf = String::with_capacity(s.len());
-        let mut used: usize = 0;
-        let mut s_iter = s.chars().skip(used).enumerate().peekable();
+        let mut used: Option<usize> = Some(0);
+        let mut s_iter = s
+            .chars()
+            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
+            .enumerate()
+            .peekable();
         // count
         loop {
             if let Some(element) = s_iter.peek() {
-                if CountStr::is_match(&element) {
+                if CountStr::is_match(element) {
                     buf.push(element.1);
                     s_iter.next();
-                    used += 1;
+                    used = used.map_or_else(|| None, |used| used.checked_add(1));
                 } else {
                     break;
                 }
@@ -63,13 +70,17 @@ impl RollCommand {
         let count_str = CountStr::new(&buf);
         buf.clear();
         // die
-        s_iter = s.chars().skip(used).enumerate().peekable();
+        s_iter = s
+            .chars()
+            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
+            .enumerate()
+            .peekable();
         loop {
             if let Some(element) = s_iter.peek() {
                 if DieStr::is_match(element) {
                     buf.push(element.1);
                     s_iter.next();
-                    used += 1;
+                    used = used.map_or_else(|| None, |used| used.checked_add(1));
                 } else {
                     break;
                 }
@@ -80,20 +91,28 @@ impl RollCommand {
         let die_str = DieStr::new(&buf);
         buf.clear();
         // mods
-        s_iter = s.chars().skip(used).enumerate().peekable();
+        s_iter = s
+            .chars()
+            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
+            .enumerate()
+            .peekable();
         loop {
             if let Some(&(idx, elem)) = s_iter.peek() {
                 if ModsStr::is_match(&(idx, elem)) {
                     buf.push(elem);
                     s_iter.next();
-                    used += 1;
+                    used = used.map_or_else(|| None, |used| used.checked_add(1));
                 } else {
                     // `"+1?".get(2) == '?'` -> could be `"+1-2"` and therefore part of new sequence
                     if idx > 1 {
                         // reset enumeration
-                        s_iter = s.chars().skip(used).enumerate().peekable();
+                        s_iter = s
+                            .chars()
+                            .skip(used.ok_or_eyre("Roll cmd might have been too long?")?)
+                            .enumerate()
+                            .peekable();
                         continue;
-                    };
+                    }
                     // fail-case: mod string cannot be shorter than 2 chars
                     return Err(Report::msg(
                         "Error: Input string was not of the form `[count]d[die]+/-[modifiers]`",
@@ -132,7 +151,7 @@ impl Display for RollCommand {
             .map(|&elem| {
                 let mut s = elem.to_string();
                 if elem >= 0 {
-                    s.insert(0, '+')
+                    s.insert(0, '+');
                 }
                 s
             })
@@ -149,9 +168,9 @@ impl CountStr {
         let num: u8 = self.0.parse()?;
         Ok(num)
     }
-    fn is_match(element: &(usize, char)) -> bool {
+    const fn is_match(element: &(usize, char)) -> bool {
         let (_idx, c) = *element;
-        c.is_digit(10)
+        c.is_ascii_digit()
     }
 }
 struct DieStr(String);
@@ -160,16 +179,20 @@ impl DieStr {
         Self(s.to_owned())
     }
     fn parse(&self) -> Result<Die> {
-        let digits: &str = match self.0.get(1..) {
-            Some(slice) => Ok(slice),
-            None => Err(Report::msg("Couldn't parse die string")),
-        }?;
+        let digits: &str = self
+            .0
+            .get(1..)
+            .map_or_else(|| Err(Report::msg("Couldn't parse die string")), Ok)?;
         let num: u8 = digits.parse()?;
         Ok(Die::new(num))
     }
-    fn is_match(element: &(usize, char)) -> bool {
+    const fn is_match(element: &(usize, char)) -> bool {
         let (idx, c) = *element;
-        if idx == 0 { c == 'd' } else { c.is_digit(10) }
+        if idx == 0 {
+            c == 'd'
+        } else {
+            c.is_ascii_digit()
+        }
     }
 }
 struct ModsStr(String);
@@ -179,18 +202,14 @@ impl ModsStr {
     }
     fn parse(&self) -> Result<Vec<i8>> {
         let s = &self.0;
-        let mut mods: Vec<Rc<str>> = Vec::with_capacity(self.0.len() / 4); // assuming 1 `+`/`-` plus 3 digits
+        let mut mods: Vec<Rc<str>> = Vec::with_capacity(self.0.len() / 4); // PERF: assuming 1 `+`/`-` plus 3 digits
         let mut buf = String::with_capacity(4);
         for c in s.chars() {
-            if c.is_digit(10) {
-                buf.push(c);
-            } else if buf.is_empty() {
-                buf.push(c);
-            } else {
+            if !buf.is_empty() && !c.is_ascii_digit() {
                 mods.push(buf.clone().into());
                 buf.clear();
-                buf.push(c);
             }
+            buf.push(c);
         }
         mods.push(buf.into());
         mods.into_iter()
@@ -205,7 +224,7 @@ impl ModsStr {
         let (idx, c) = *element;
         match idx {
             0 => "+-".contains(c),
-            _ => c.is_digit(10),
+            _ => c.is_ascii_digit(),
         }
     }
 }
@@ -236,15 +255,13 @@ impl RollResult {
 }
 impl Display for RollResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let result = match self.result {
-            Some(result) => result.to_string(),
-            None => "OVERFLOW!".to_string(),
-        };
+        let result = self
+            .result
+            .map_or_else(|| "OVERFLOW!".to_string(), |result| result.to_string());
         let dice_tray = &self.dice_tray;
-        let net_modifier = match self.net_modifier {
-            Some(modifier) => modifier.to_string(),
-            None => "OVERFLOW!".to_string(),
-        };
+        let net_modifier = self
+            .net_modifier
+            .map_or_else(|| "OVERFLOW!".to_string(), |modifier| modifier.to_string());
         let modifiers = self.modifiers.clone();
         write!(f, "{result}\n{dice_tray}\n{net_modifier}: {modifiers:?}")
     }

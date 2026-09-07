@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use color_eyre::eyre::Report;
+use color_eyre::eyre::{OptionExt, Report};
 use rand::random_range;
 
 #[derive(Clone, Copy, Debug)]
@@ -39,9 +39,9 @@ impl FromStr for Die {
             _ => {
                 return Err(Report::msg("Die string must start with `d`, eg `d20`"));
             }
-        };
+        }
         s.get(1..)
-            .expect("s[0] was 'd', so s[1] should have been a char boundary?")
+            .ok_or_eyre("s[0] was 'd', so s[1] should have been a char boundary?")?
             .parse()
     }
 }
@@ -70,7 +70,7 @@ impl DiceTray {
     fn sum_rolls(rolls: &[u8]) -> Option<u32> {
         rolls
             .iter()
-            .fold(Some(0u32), |acc, &elem| acc?.checked_add(elem.into()))
+            .try_fold(0u32, |acc, &elem| acc.checked_add(elem.into()))
     }
 }
 impl Display for DiceTray {
