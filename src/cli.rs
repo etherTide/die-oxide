@@ -5,7 +5,12 @@ use color_eyre::eyre::{Ok, OptionExt, Report, Result};
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
+/// A command-line dice roller
 pub struct Cli {
+    /// default 1d6+0
+    /// [count] ['d' die_size] ['+'/'-' modifier]*...
+    ///
+    /// e.g. 8d6-1+3, 2d4+2+0-1, 5, +2, d100, ...
     pub roll_cmds: Option<Vec<RollCommand>>,
 }
 
