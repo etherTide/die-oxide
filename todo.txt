@@ -1,0 +1,5 @@
+tests
+docs
+advantage
+exploding rolls
+optional re-rolling
