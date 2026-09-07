@@ -45,18 +45,18 @@ pub struct DiceTray {
     pub die: Die,
     pub count: u8,
     pub rolls: Arc<[u8]>,
-    pub result: Option<u32>,
+    pub sum: Option<u32>,
 }
 impl DiceTray {
     #[must_use]
     pub fn new(die: Die, count: u8) -> Self {
         let rolls: Arc<[u8]> = (0..count).into_iter().map(|_| die.roll()).collect();
-        let result = Self::sum_rolls(&rolls);
+        let sum = Self::sum_rolls(&rolls);
         Self {
             die,
             count,
             rolls,
-            result,
+            sum,
         }
     }
 
@@ -69,13 +69,7 @@ impl DiceTray {
 }
 impl Display for DiceTray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.result {
-            Some(result) => {
-                write!(f, "{}: {} {:?}", self.die, result, self.rolls)
-            }
-            None => {
-                write!(f, "{}: OVERFLOW! {:?}", self.die, self.rolls)
-            }
-        }
+        let result: String = self.sum.map_or("OVERFLOW!".into(), |val| val.to_string());
+        write!(f, "{}: {} {:?}", self.die, result, self.rolls)
     }
 }
