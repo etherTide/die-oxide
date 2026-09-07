@@ -7,28 +7,22 @@ use std::{
 use color_eyre::eyre::{OptionExt, Report};
 use rand::random_range;
 
-#[derive(Clone, Copy, Debug)]
-pub struct Die {
-    faces: u8,
-}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Die(pub u8);
 impl Die {
     #[must_use]
-    pub const fn new(faces: u8) -> Self {
-        Self { faces }
-    }
-    #[must_use]
     pub fn roll(&self) -> u8 {
-        random_range(1..=self.faces)
+        random_range(1..=self.0)
     }
 }
 impl Default for Die {
     fn default() -> Self {
-        Self::new(6)
+        Self(6)
     }
 }
 impl Display for Die {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "d{}", self.faces)
+        write!(f, "d{}", self.0)
     }
 }
 impl FromStr for Die {
