@@ -102,7 +102,7 @@ impl ModsStr {
     fn parse(&self) -> Result<Vec<i8>> {
         let s = &self.0;
         if s.is_empty() {
-            return Ok(Vec::with_capacity(0));
+            return Ok(Vec::new());
         }
         // PERF: capacity = 4 bc I'm assuming 1x +/- plus 3x digit
         let mut mods: Vec<Rc<str>> = Vec::with_capacity(self.0.len() / 4);
@@ -120,22 +120,20 @@ impl ModsStr {
     fn get_from_roll_str(roll_str: &str) -> Self {
         let mut buf = String::with_capacity(roll_str.len());
         for c in roll_str.chars() {
-            if c.is_ascii_digit() {
-                buf.push(c);
-            } else if "+-".contains(c) && {
-                match buf.chars().last() {
+            if c.is_ascii_digit()
+                || ("+-".contains(c)
                     // Don't want "+-XX" etc, should be 1 +/- per mod
-                    Some(prev) => !"+-".contains(prev),
-                    _ => true,
-                }
-            } {
+                    && buf.chars().last().is_none_or(
+                        |prev| !"+-".contains(prev),
+                    ))
+            {
                 buf.push(c);
             } else {
                 break;
             }
         }
         buf.shrink_to_fit();
-        ModsStr(buf)
+        Self(buf)
     }
 }
 impl FromStr for RollCommand {
