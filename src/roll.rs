@@ -13,7 +13,7 @@ impl RollCommand {
         Self {
             count,
             die,
-            modifiers: modifiers.to_owned().into(),
+            modifiers: modifiers.into(),
         }
     }
     #[must_use]
