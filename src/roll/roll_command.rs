@@ -1,5 +1,7 @@
+use color_eyre::Report;
+
 use crate::{dice::Die, roll::roll_result::RollResult};
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RollCommand {
@@ -49,6 +51,16 @@ impl Display for RollCommand {
             })
             .collect();
         write!(f, "{}{}{}", self.count, self.die, mods_str)
+    }
+}
+impl FromStr for RollCommand {
+    type Err = Report;
+    /// The format of a `RollCommand` is:
+    /// `[count]` `['d'size]` `[('+'/'-')modifier]*`
+    /// eg `"3d8+2-1"`
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let roll_string = crate::cli::RollString::from_str(s)?;
+        roll_string.parse()
     }
 }
 
