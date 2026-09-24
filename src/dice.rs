@@ -69,7 +69,9 @@ impl DiceTray {
 }
 impl Display for DiceTray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let result: String = self.sum.map_or("OVERFLOW!".into(), |val| val.to_string());
+        let result: String = self
+            .sum
+            .map_or_else(|| "OVERFLOW!".to_string(), |val| val.to_string());
         write!(f, "{}: {} {:?}", self.die, result, self.rolls)
     }
 }
