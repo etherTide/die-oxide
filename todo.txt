@@ -1,5 +1,5 @@
-tests
-docs
-advantage
-exploding rolls
-optional re-rolling
+advantage +RollFlags
+exploding rolls +RollFlags
+optional re-rolling +RollFlags
+2026-09-25 finish readme +chore +docs
+2026-09-25 add license +chore

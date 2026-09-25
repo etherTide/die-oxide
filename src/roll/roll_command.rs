@@ -1,21 +1,27 @@
 use color_eyre::Report;
 
-use crate::{dice::Die, roll::roll_result::RollResult};
+use crate::{
+    dice::Die,
+    roll::{roll_flags::RollFlags, roll_result::RollResult},
+};
 use std::{fmt::Display, str::FromStr, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+// Required to be thread-safe in order to inter-opt with clap
 pub struct RollCommand {
-    pub(super) count: u8,
-    pub(super) die: Die,
-    pub(super) modifiers: Arc<[i8]>,
+    pub count: u8,
+    pub die: Die,
+    pub modifiers: Arc<[i8]>,
+    pub flags: RollFlags,
 }
 impl RollCommand {
     #[must_use]
-    pub fn new(count: u8, die: Die, modifiers: &[i8]) -> Self {
+    pub fn new(count: u8, die: Die, modifiers: &[i8], flags: RollFlags) -> Self {
         Self {
             count,
             die,
-            modifiers: modifiers.to_owned().into(),
+            modifiers: modifiers.into(),
+            flags,
         }
     }
     #[must_use]
@@ -34,7 +40,7 @@ impl RollCommand {
 }
 impl Default for RollCommand {
     fn default() -> Self {
-        Self::new(1, Die::default(), &[])
+        Self::new(1, Die::default(), &[], RollFlags::default())
     }
 }
 impl Display for RollCommand {
@@ -66,7 +72,10 @@ impl FromStr for RollCommand {
 
 #[cfg(test)]
 mod tests {
-    use crate::{dice::Die, roll::RollCommand};
+    use crate::{
+        dice::Die,
+        roll::{RollCommand, roll_flags::RollFlags},
+    };
     use std::{assert_matches, str::FromStr};
 
     #[test]
@@ -74,15 +83,18 @@ mod tests {
         let new_cmd = RollCommand::new;
         let ok_strs: Vec<(&str, RollCommand)> = vec![
             ("", RollCommand::default()),
-            ("2d3", new_cmd(2, Die(3), &[])),
-            ("4d5+6", new_cmd(4, Die(5), &[6])),
-            ("d7", new_cmd(1, Die(7), &[])),
-            ("d8+9", new_cmd(1, Die(8), &[9])),
-            ("-0", new_cmd(1, Die::default(), &[0])),
-            ("1-2", new_cmd(1, Die::default(), &[-2])),
+            ("2d3", new_cmd(2, Die(3), &[], RollFlags::default())),
+            ("4d5+6", new_cmd(4, Die(5), &[6], RollFlags::default())),
+            ("d7", new_cmd(1, Die(7), &[], RollFlags::default())),
+            ("d8+9", new_cmd(1, Die(8), &[9], RollFlags::default())),
+            ("-0", new_cmd(1, Die::default(), &[0], RollFlags::default())),
+            (
+                "1-2",
+                new_cmd(1, Die::default(), &[-2], RollFlags::default()),
+            ),
             (
                 "150d200+10-20+30-40",
-                new_cmd(150, Die(200), &[10, -20, 30, -40]),
+                new_cmd(150, Die(200), &[10, -20, 30, -40], RollFlags::default()),
             ),
         ];
         for (s, cmd) in ok_strs {
