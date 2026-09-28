@@ -1,4 +1,4 @@
-use super::roll_trigger::RollTrigger;
+use crate::roll::roll_trigger::{DieTrigger, RankTrigger};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RollFlags {
@@ -31,20 +31,13 @@ impl Default for RollFlags {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DropFlag {
-    DropHighest(RollTrigger),
-    DropLowest(RollTrigger),
-}
+pub struct DropFlag(pub RankTrigger);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ExplodeFlag;
+pub struct ExplodeFlag(DieTrigger);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SubstituteFlag {
-    Ceiling(RollTrigger), // Advantage
-    Floor(RollTrigger),   // Disadvantage
-    Modify(RollTrigger),  // Treat all Xs as Ys
-}
+pub struct SubstituteFlag(DieTrigger); // "Treat all Xs as Ys"
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReRollFlag {
-    Disgressionary(RollTrigger),
-    Mandatory(RollTrigger),
+    Disgressionary(DieTrigger),
+    Mandatory(DieTrigger),
 }

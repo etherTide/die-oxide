@@ -9,10 +9,11 @@ pub struct RollResult {
     result: Option<i64>,
 }
 impl RollResult {
-    pub(super) fn new(cmd: &RollCommand) -> Self {
+    // FIXME: Need to implement new `roll_flags`!
+    pub fn new(cmd: &RollCommand) -> Self {
         let dice_tray = DiceTray::new(cmd.die, cmd.count);
         let modifiers = cmd.modifiers.clone();
-        let net_modifier: Option<i32> = cmd.sum_mods();
+        let net_modifier: Option<i32> = Self::sum_mods(&modifiers);
         let result: Option<i64> = match (dice_tray.sum, net_modifier) {
             (Some(a), Some(b)) => i64::checked_add(a.into(), b.into()),
             _ => None,
@@ -23,6 +24,12 @@ impl RollResult {
             net_modifier,
             result,
         }
+    }
+    #[must_use]
+    fn sum_mods(modifiers: &[i8]) -> Option<i32> {
+        modifiers
+            .iter()
+            .try_fold(0_i32, |acc, &elem| acc.checked_add(elem.into()))
     }
 }
 impl Display for RollResult {

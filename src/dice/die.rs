@@ -1,10 +1,9 @@
+use color_eyre::eyre::{OptionExt, Report};
+use rand::random_range;
 use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
-
-use color_eyre::eyre::{OptionExt, Report};
-use rand::random_range;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Die(pub u8);

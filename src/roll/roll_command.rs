@@ -32,11 +32,6 @@ impl RollCommand {
         println!("Rolling {self}...");
         println!("{}", self.roll());
     }
-    pub(super) fn sum_mods(&self) -> Option<i32> {
-        self.modifiers
-            .iter()
-            .try_fold(0_i32, |acc, &elem| acc.checked_add(elem.into()))
-    }
 }
 impl Default for RollCommand {
     fn default() -> Self {
