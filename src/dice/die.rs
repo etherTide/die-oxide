@@ -1,3 +1,4 @@
+use crate::dice::DieResult;
 use color_eyre::eyre::{OptionExt, Report};
 use rand::random_range;
 use std::{
@@ -9,8 +10,8 @@ use std::{
 pub struct Die(pub u8);
 impl Die {
     #[must_use]
-    pub fn roll(&self) -> u8 {
-        random_range(1..=self.0)
+    pub fn roll(&self) -> DieResult {
+        DieResult::new()
     }
 }
 impl Default for Die {

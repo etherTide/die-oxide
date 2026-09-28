@@ -1,4 +1,5 @@
 use crate::dice::{Die, die_result::DieResult};
+use crate::roll::roll_flags::RollFlags;
 
 use std::fmt::Display;
 use std::rc::Rc;
@@ -12,8 +13,8 @@ pub struct DiceTray {
 }
 impl DiceTray {
     #[must_use]
-    pub fn new(die: Die, count: u8) -> Self {
-        let rolls: Rc<[DieResult]> = Self::get_rolls(die, count);
+    pub fn new(die: Die, count: u8, roll_flags: RollFlags) -> Self {
+        let rolls: Rc<[DieResult]> = Self::get_rolls(die, count, roll_flags);
         let sum = Self::get_sum(&rolls);
         Self {
             die,
@@ -30,8 +31,11 @@ impl DiceTray {
             .try_fold(0u32, |acc, &elem| acc.checked_add(elem.value.into()))
     }
     #[must_use]
-    fn get_rolls(die: Die, count: u8) -> Rc<[DieResult]> {
-        let results = Vec::<DieResult>::with_capacity(count.into());
+    fn get_rolls(die: Die, count: u8, flags: RollFlags) -> Rc<[DieResult]> {
+        if flags.normal() {
+            return (0..count).map(|_| die.roll()).collect();
+        }
+        loop {}
     }
 }
 impl Display for DiceTray {

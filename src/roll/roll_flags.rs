@@ -2,10 +2,10 @@ use crate::roll::roll_trigger::{DieTrigger, RankTrigger};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RollFlags {
-    drop: Option<DropFlag>,
-    explode: Option<ExplodeFlag>,
-    substitute: Option<SubstituteFlag>,
-    re_roll: Option<ReRollFlag>,
+    pub drop: Option<DropFlag>,
+    pub explode: Option<ExplodeFlag>,
+    pub substitute: Option<SubstituteFlag>,
+    pub re_roll: Option<ReRollFlag>,
 }
 impl RollFlags {
     #[must_use]
