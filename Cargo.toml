@@ -5,11 +5,17 @@ edition = "2024"
 
 [dependencies]
 # COMMAND LINE PARSING
-clap = { version = "4.5.53", features = ["derive"] }
+# clap = { version = "4.5.53", features = ["derive"] }
 # SIMPLE PRETTY ERROR HANDLING
 color-eyre = "0.6.5"
 rand = "0.10.2"
 
+[lints]
+[lints.rust]
+# DON'T CONFLATE THE TWO TYPES OF UNSAFE!
+unsafe_op_in_unsafe_fn = "deny"
+[lints.cargo]
+pedantic = "deny"
 [lints.clippy]
 # UM, ACTUALLY
 pedantic = { level = "deny", priority = -1 }
@@ -29,4 +35,3 @@ panic_in_result_fn = "deny"
 panic = "deny"
 exit = "deny"
 as_conversions = "deny"
-
