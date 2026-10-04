@@ -1,13 +1,9 @@
-use crate::{
-    dice::die::Die,
-    rolls::roll_special::{flag::Flag, flag_triggers::FlagTriggers},
-};
-use std::rc::Rc;
+use crate::dice::die::Die;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiceTray {
     pub die: Die,
-    pub results: Rc<[u8]>,
+    pub results: Vec<u8>,
 }
 impl DiceTray {
     pub fn new(die: Die, count: u8) -> Self {

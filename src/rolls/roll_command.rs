@@ -5,5 +5,5 @@ pub struct RollCommand {
     pub die: Die,
     pub count: u8,
     pub modifiers: Rc<[i8]>,
-    pub flag: Flag,
+    pub flag: Option<Flag>,
 }
