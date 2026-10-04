@@ -1,9 +1,22 @@
-use crate::{dice::dice_tray::DiceTray, rolls::roll_special::trigger_pattern::TriggerPattern};
-use std::rc::Rc;
+use crate::{
+    dice::dice_tray::DiceTray,
+    rolls::roll_special::{flag_triggers::FlagTriggers, pattern::Pattern},
+};
 
-pub enum Flag {
-    Drop(TriggerPattern),
-    Reroll(TriggerPattern),
-    Explode(TriggerPattern),
-    Substitute(TriggerPattern),
+pub struct Flag {
+    pub action: Action,
+    pub pattern: Pattern,
+}
+
+pub enum Action {
+    Drop,
+    /// field: allow recursive re-rolling?
+    ReRoll(FlagRecursion),
+    Explode(FlagRecursion),
+    Substitute,
+}
+
+pub enum FlagRecursion {
+    None,
+    Limit(u8),
 }

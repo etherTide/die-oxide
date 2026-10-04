@@ -4,11 +4,17 @@ use crate::{
 };
 use std::rc::Rc;
 
-pub struct DiceTray(pub Die, pub Rc<[u8]>);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiceTray {
+    pub die: Die,
+    pub results: Rc<[u8]>,
+}
 impl DiceTray {
     pub fn new(die: Die, count: u8) -> Self {
         let rolls = (1..count).map(|_| die.roll()).collect();
-        Self(die, rolls)
+        Self {
+            die,
+            results: rolls,
+        }
     }
-    pub fn get_flag_triggers(&mut self, &flag: &Flag) -> FlagTriggers {}
 }

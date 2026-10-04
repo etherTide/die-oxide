@@ -1,5 +1,6 @@
 use rand::random_range;
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Die(pub u8);
 impl Die {
     #[must_use]
