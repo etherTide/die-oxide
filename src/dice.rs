@@ -1,24 +1,23 @@
-use std::fmt::Display;
-
 use rand::random_range;
+use std::fmt::Display;
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 pub struct Die(pub u8);
 impl Die {
     #[must_use]
-    pub fn roll(self) -> DieRoll {
+    pub fn roll(&self) -> DieRoll {
         let result = random_range(1..self.into());
-        DieRoll(self, result)
+        DieRoll(*self, result)
     }
 }
-impl From<Die> for u8 {
-    fn from(value: Die) -> Self {
+impl From<&Die> for u8 {
+    fn from(&value: &Die) -> Self {
         value.0
     }
 }
 impl Display for Die {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "d{}", u8::from(*self))
+        write!(f, "d{}", u8::from(self))
     }
 }
 
@@ -28,7 +27,7 @@ pub struct DieRoll(pub Die, pub u8);
 impl DieRoll {
     #[must_use]
     pub fn distance_from_max(&self) -> u8 {
-        u8::from(self.0).strict_sub(self.1)
+        u8::from(&self.0).strict_sub(self.1)
     }
 }
 impl From<DieRoll> for u8 {
@@ -44,8 +43,9 @@ pub struct DiceTower {
 }
 impl DiceTower {
     #[must_use]
-    pub fn roll(self) -> DiceTray {
-        let results = (0..self.count).map(|x| Die(x).roll()).collect();
+    pub fn roll(&self) -> DiceTray {
+        let range = 0..self.count;
+        let results = range.into_iter().map(|x| Die(x).roll()).collect();
         DiceTray {
             die: self.die,
             results,
@@ -60,6 +60,7 @@ pub struct DiceTray {
     pub results: Vec<DieRoll>,
 }
 impl DiceTray {
+    #[must_use]
     pub fn sum(&self) -> Option<u32> {
         self.results
             .iter()

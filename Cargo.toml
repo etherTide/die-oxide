@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 # COMMAND LINE PARSING
-clap = { version = "4.5.53", features = ["derive"] }
+# clap = { version = "4.5.53", features = ["derive"] }
 # SIMPLE PRETTY ERROR HANDLING
-color-eyre = "0.6.5"
+# color-eyre = "0.6.5"
 rand = "0.10.2"
 
 [lints.clippy]
